@@ -70,11 +70,11 @@ curl https://$(oc get route hello-liberty -o jsonpath='{.spec.host}')/api/hello
 ```bash
 oc create secret generic github-webhook-secret --from-literal=secretToken=<zelfbedacht-geheim>
 oc apply -f tekton/triggers.yaml
-oc expose service el-hello-listener
+oc create route edge el-hello-listener --service=el-hello-listener
 oc get route el-hello-listener -o jsonpath='{.spec.host}'
 ```
 GitHub → repo → **Settings → Webhooks → Add webhook**:
-- Payload URL: `http://<host-van-hierboven>`
+- Payload URL: `https://<host-van-hierboven>`
 - Content type: `application/json`
 - Secret: je zelfbedachte geheim
 - Event: *Just the push event*

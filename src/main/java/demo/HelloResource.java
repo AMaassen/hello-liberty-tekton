@@ -9,7 +9,7 @@ import jakarta.ws.rs.core.MediaType;
 @Path("/hello")
 public class HelloResource {
 
-    static final String MESSAGE = "Hallo vanuit Open Liberty op OpenShift, gebouwd door Tekton";
+    static final String MESSAGE = "Hallo vanuit Open Liberty op OpenShift, gebouwd door Tekton (gestart door git push)";
 
     @GET
     @Produces(MediaType.TEXT_PLAIN)
