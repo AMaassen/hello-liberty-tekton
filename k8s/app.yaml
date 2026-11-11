@@ -1,0 +1,73 @@
+# Deployment + Service + Route voor de app.
+# IMAGE_PLACEHOLDER wordt door de Tekton-task 'deploy' vervangen door image@digest.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello-liberty
+  labels:
+    app: hello-liberty
+    app.kubernetes.io/part-of: hello-liberty
+    app.openshift.io/runtime: openliberty
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hello-liberty
+  template:
+    metadata:
+      labels:
+        app: hello-liberty
+    spec:
+      containers:
+        - name: app
+          image: IMAGE_PLACEHOLDER
+          ports:
+            - containerPort: 9080
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 9080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 9080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello-liberty
+  labels:
+    app: hello-liberty
+spec:
+  selector:
+    app: hello-liberty
+  ports:
+    - name: http
+      port: 9080
+      targetPort: 9080
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: hello-liberty
+  labels:
+    app: hello-liberty
+spec:
+  to:
+    kind: Service
+    name: hello-liberty
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

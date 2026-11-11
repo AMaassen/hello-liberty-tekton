@@ -1,0 +1,80 @@
+# De pipeline: clone -> maven build/test -> image bouwen + pushen -> deploy
+#
+#   git-clone  -->  maven-build  -->  buildah  -->  deploy
+#   (Red Hat)       (eigen)           (Red Hat)     (eigen)
+#
+# Alle Tasks delen één workspace 'ws' (een PVC), zodat de broncode en de WAR
+# van Task naar Task 'doorgegeven' worden.
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: hello-ci
+spec:
+  params:
+    - name: git-url
+      description: URL van jouw Git-repo met dit project
+    - name: revision
+      description: Branch, tag of commit
+      default: main
+    - name: app-name
+      default: hello-liberty
+  workspaces:
+    - name: ws
+  tasks:
+    - name: clone
+      taskRef:
+        resolver: cluster          # haalt de Task op uit een andere namespace
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: git-clone
+          - name: namespace
+            value: openshift-pipelines
+      params:
+        - name: URL
+          value: $(params.git-url)
+        - name: REVISION
+          value: $(params.revision)
+      workspaces:
+        - name: output
+          workspace: ws
+
+    - name: build
+      runAfter: [clone]
+      taskRef:
+        name: maven-build
+      workspaces:
+        - name: source
+          workspace: ws
+
+    - name: image
+      runAfter: [build]
+      taskRef:
+        resolver: cluster
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: buildah
+          - name: namespace
+            value: openshift-pipelines
+      params:
+        # Interne OpenShift-registry. Bij de Belastingdienst zou dit Harbor zijn.
+        - name: IMAGE
+          value: image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/$(params.app-name):$(tasks.clone.results.COMMIT)
+      workspaces:
+        - name: source
+          workspace: ws
+
+    - name: deploy
+      runAfter: [image]
+      taskRef:
+        name: deploy
+      params:
+        # Uitrollen op digest: precies het image dat net gebouwd is
+        - name: IMAGE
+          value: image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/$(params.app-name)@$(tasks.image.results.IMAGE_DIGEST)
+      workspaces:
+        - name: source
+          workspace: ws

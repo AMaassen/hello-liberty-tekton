@@ -1,0 +1,25 @@
+# Eén uitvoering van de pipeline. Start met:
+#   oc create -f tekton/pipelinerun.yaml
+# ('create', niet 'apply': generateName geeft elke run een nieuwe naam)
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: hello-ci-run-
+spec:
+  pipelineRef:
+    name: hello-ci
+  params:
+    - name: git-url
+      value: https://github.com/AMaassen/hello-liberty-tekton.git
+    - name: revision
+      value: main
+  taskRunTemplate:
+    serviceAccountName: pipeline
+  workspaces:
+    - name: ws
+      volumeClaimTemplate:        # per run een verse PVC, wordt mee opgeruimd met de run
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 1Gi

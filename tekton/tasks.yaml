@@ -1,0 +1,49 @@
+# Twee eigen Tasks. git-clone en buildah komen kant-en-klaar van Red Hat (zie pipeline.yaml).
+#
+# Jenkins-vergelijking: een Task is een 'stage', elke step is een 'sh'-stap
+# die in een eigen container draait. Alle steps van één Task draaien in één pod.
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: maven-build
+spec:
+  description: Compileert, draait de unittests en bouwt target/hello.war
+  workspaces:
+    - name: source
+  steps:
+    - name: mvn-package
+      image: registry.access.redhat.com/ubi9/openjdk-17:latest
+      workingDir: $(workspaces.source.path)
+      env:
+        - name: HOME
+          value: /tmp
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        # Maven-cache in de workspace, zodat hij binnen deze run blijft bestaan
+        mvn -B -ntp -Dmaven.repo.local=$(workspaces.source.path)/.m2 package
+        ls -l target/*.war
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: deploy
+  # Rolt uit met 'oc'. In een GitOps-opzet (Belastingdienst) doet ArgoCD dit
+  # en zou deze Task alleen de image-tag in een config-repo bijwerken.
+spec:
+  params:
+    - name: IMAGE
+      description: Volledige image-referentie, bij voorkeur image@sha256:...
+  workspaces:
+    - name: source
+  steps:
+    - name: oc-apply
+      image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        sed "s|IMAGE_PLACEHOLDER|$(params.IMAGE)|" k8s/app.yaml | oc apply -f -
+        oc rollout status deployment/hello-liberty --timeout=180s
+        echo "App bereikbaar op: https://$(oc get route hello-liberty -o jsonpath='{.spec.host}')/api/hello"
